@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>運動循環計時器</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #121212;
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            transition: background-color 0.5s; /* 切換狀態時背景顏色會淡入淡出 */
+        }
+        /* 運動中背景變綠色，休息中背景變藍色 */
+        body.working { background-color: #1b5e20; }
+        body.resting { background-color: #0d47a1; }
+
+        #status { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+        #display { font-size: 100px; font-family: monospace; margin-bottom: 10px; }
+        #cycle-info { font-size: 20px; color: #ccc; margin-bottom: 30px; }
+
+        .settings {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .settings label { display: block; font-size: 14px; margin-bottom: 5px; }
+        input { width: 80px; padding: 8px; border-radius: 5px; border: none; text-align: center; font-size: 16px; }
+
+        .btns button {
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            margin: 5px;
+            font-weight: bold;
+        }
+        .start { background-color: #4caf50; color: white; }
+        .stop { background-color: #f44336; color: white; }
+        .reset { background-color: #757575; color: white; }
+        button:disabled { opacity: 0.3; }
+    </style>
+</head>
+<body id="body">
+
+    <div id="status">準備開始</div>
+    <div id="display">00.00</div>
+    <div id="cycle-info">剩餘組數: --</div>
+
+    <div class="settings">
+        <div>
+            <label>運動秒數</label>
+            <input type="number" id="workSec" value="30">
+        </div>
+        <div>
+            <label>休息秒數</label>
+            <input type="number" id="restSec" value="10">
+        </div>
+        <div style="grid-column: span 2;">
+            <label>總組數</label>
+            <input type="number" id="totalSets" value="3" style="width: 95%;">
+        </div>
+    </div>
+
+    <div class="btns">
+        <button id="startBtn" class="start" onclick="startWorkout()">開始運動</button>
+        <button id="stopBtn" class="stop" onclick="stopTimer()">暫停</button>
+        <button class="reset" onclick="resetTimer()">重設</button>
+    </div>
+
+    <audio id="beepWork" src="https://actions.google.com/sounds/v1/cartoon/woodpecker.ogg"></audio>
+    <audio id="beepDone" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"></audio>
+
+    <script>
+        let timerInterval = null;
+        let remainingTime = 0;
+        let currentSet = 1;
+        let isWorking = true; // true: 運動中, false: 休息中
+
+        function updateDisplay(time) {
+            let ss = Math.floor(time / 1000);
+            let ms = Math.floor((time % 1000) / 10);
+            document.getElementById("display").innerText = 
+                `${ss.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
+        }
+
+        function startWorkout() {
+            if (timerInterval) return;
+
+            // 第一次啟動初始化
+            if (remainingTime <= 0) {
+                currentSet = 1;
+                isWorking = true;
+                setupState();
+            }
+
+            document.getElementById("startBtn").disabled = true;
+            let lastTime = Date.now();
+
+            timerInterval = setInterval(() => {
+                let now = Date.now();
+                remainingTime -= (now - lastTime);
+                lastTime = now;
+
+                if (remainingTime <= 0) {
+                    switchState();
+                }
+                updateDisplay(remainingTime);
+            }, 10);
+        }
+
+        function setupState() {
+            const body = document.getElementById("body");
+            const status = document.getElementById("status");
+            const sets = document.getElementById("totalSets").value;
+            
+            if (isWorking) {
+                remainingTime = document.getElementById("workSec").value * 1000;
+                status.innerText = "💪 運動中！";
+                body.className = "working";
+                document.getElementById("beepWork").play();
+            } else {
+                remainingTime = document.getElementById("restSec").value * 1000;
+                status.innerText = "☕ 休息時間";
+                body.className = "resting";
+                document.getElementById("beepWork").play();
+            }
+            document.getElementById("cycle-info").innerText = `第 ${currentSet} 組 / 共 ${sets} 組`;
+        }
+
+        function switchState() {
+            const totalSets = document.getElementById("totalSets").value;
+
+            if (isWorking) {
+                // 運動完切換到休息
+                isWorking = false;
+                setupState();
+            } else {
+                // 休息完切換到下一組運動
+                currentSet++;
+                if (currentSet > totalSets) {
+                    finishWorkout();
+                } else {
+                    isWorking = true;
+                    setupState();
+                }
+            }
+        }
+
+        function finishWorkout() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            remainingTime = 0;
+            document.getElementById("status").innerText = "🎉 訓練完成！";
+            document.getElementById("body").className = "";
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("beepDone").play();
+            // alert("恭喜！你完成了所有訓練！");
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            document.getElementById("startBtn").disabled = false;
+        }
+
+        function resetTimer() {
+            stopTimer();
+            remainingTime = 0;
+            document.getElementById("display").innerText = "00.00";
+            document.getElementById("status").innerText = "準備開始";
+            document.getElementById("body").className = "";
+        }
+    </script>
+</body>
+</html>
